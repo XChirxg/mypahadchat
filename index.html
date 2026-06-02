@@ -456,7 +456,30 @@ function addTyping(){
   w.innerHTML=`<div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
   chat.appendChild(w); scrollBottom();
 }
-function removeTyping(){ const t=document.getElementById('typing'); if(t) t.remove(); }
+async function botSay(html,delay=800){
+  addTyping();
+  await new Promise(r=>setTimeout(r,delay));
+  removeTyping();
+  await addBubble(html,'in');
+}
+
+function addChips(options, onSelect){
+  const wrap=document.createElement('div'); wrap.className='chips';
+  options.forEach(opt=>{
+    const btn=document.createElement('button'); btn.className='chip';
+    btn.textContent=typeof opt==='object'?opt.label:opt;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+      btn.classList.add('selected');
+      const txt=btn.textContent;
+      addBubble(txt,'out');
+      setTimeout(()=>wrap.remove(),300);
+      onSelect(typeof opt==='object'?opt.value:opt, txt);
+    });
+    wrap.appendChild(btn);
+  });
+  chat.appendChild(wrap); scrollBottom();
+}
 
 async function startFlow(){
   const hasHistory = loadHistory();
@@ -839,7 +862,13 @@ function handleSend(){
   const val=input.value.trim(); if(!val) return;
   input.value=''; sendBtn.disabled=true;
 
-  if(step===1){
+  if(step===0){
+    addBubble(val,'out');
+    botSay(`Great! Please select items from our catalog list below:`);
+    setTimeout(() => {
+      openExtraSelectorForNewOrder();
+    }, 800);
+  } else if(step===1){
     const name=cleanName(val);
     if(name.length<2){
       addBubble(val,'out');
