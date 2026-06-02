@@ -35,7 +35,14 @@ body{display:flex;flex-direction:column;width:100%;max-width:100%;margin:0 auto;
 .h-name{font-size:14px;font-weight:600;color:#fff;line-height:1.2;}
 .h-sub{font-size:10.5px;color:rgba(255,255,255,0.85);margin-top:2px;}
 .h-badge{background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 9px;font-size:9.5px;color:#fff;font-weight:600;}
-#clearChatBtn:hover{background:rgba(255,255,255,0.3) !important;}
+.h-menu-btn{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:50%;display:flex;align-items:center;justify-content:center;outline:none;transition:background 0.15s;line-height:1;}
+.h-menu-btn:hover{background:rgba(255,255,255,0.15);}
+.h-dropdown{position:absolute;top:44px;right:16px;background:#fff;border:1px solid #ddd;box-shadow:0 3px 12px rgba(0,0,0,0.15);border-radius:8px;width:150px;z-index:200;display:flex;flex-direction:column;overflow:hidden;animation:slideDown .15s ease;}
+@keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.h-dropdown-item{background:none;border:none;padding:10px 14px;text-align:left;font-size:11.5px;color:#333;cursor:pointer;font-family:inherit;font-weight:600;display:flex;align-items:center;gap:8px;transition:background 0.1s;}
+.h-dropdown-item:hover{background:#f5f5f5;}
+.h-dropdown-item.danger{color:#d32f2f;}
+.h-dropdown-item.danger:hover{background:#ffebee;}
 
 /* CHAT AREA */
 .chat{flex:1;overflow-y:auto;padding:14px 16px 84px;position:relative;z-index:1;background:var(--bg);width:100%;}
@@ -163,7 +170,13 @@ body{display:flex;flex-direction:column;width:100%;max-width:100%;margin:0 auto;
     <div class="h-name" id="hName">Loading Store...</div>
     <div class="h-sub" id="hSub">Connecting...</div>
   </div>
-  <button id="clearChatBtn" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:10px;font-weight:600;cursor:pointer;padding:4px 10px;border-radius:12px;font-family:inherit;transition:all 0.15s;margin-right:8px;outline:none;">Clear Chat</button>
+  <div style="position:relative; display:inline-block;">
+    <button id="menuBtn" class="h-menu-btn">⋮</button>
+    <div id="headerMenu" class="h-dropdown hidden">
+      <button id="viewProfileBtn" class="h-dropdown-item">🏪 Shop Profile</button>
+      <button id="clearChatBtn" class="h-dropdown-item danger">🗑️ Clear Chat & Reset</button>
+    </div>
+  </div>
   <div class="h-badge">Order Agent</div>
 </div>
 
@@ -267,6 +280,7 @@ let step = 0;
 let listingsList = []; // store owner's catalog
 let extraQuantities = {}; // tracking selections for add extra
 let mapInitialized = false;
+let tempCoords = null;
 
 const chat    = document.getElementById('chat');
 const input   = document.getElementById('userInput');
@@ -301,11 +315,35 @@ input.addEventListener('input', () => { sendBtn.disabled = input.value.trim() ==
 input.addEventListener('keydown', e => { if(e.key==='Enter' && !sendBtn.disabled) handleSend(); });
 sendBtn.addEventListener('click', handleSend);
 
+// Header dropdown menu logic
+const menuBtn = document.getElementById('menuBtn');
+const headerMenu = document.getElementById('headerMenu');
+const viewProfileBtn = document.getElementById('viewProfileBtn');
 const clearChatBtn = document.getElementById('clearChatBtn');
+
+if (menuBtn && headerMenu) {
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    headerMenu.classList.toggle('hidden');
+  });
+}
+document.addEventListener('click', () => {
+  if (headerMenu) headerMenu.classList.add('hidden');
+});
+
+if (viewProfileBtn) {
+  viewProfileBtn.addEventListener('click', () => {
+    window.open(profileUrl, '_blank');
+  });
+}
+
 if (clearChatBtn) {
   clearChatBtn.addEventListener('click', () => {
-    if (confirm("Are you sure you want to clear chat history with this seller?")) {
+    if (confirm("Are you sure you want to clear chat history and reset your profile details?")) {
       localStorage.removeItem(`mp_chat_history_${BIZ_ID}`);
+      localStorage.removeItem(`mp_last_items_${BIZ_ID}`);
+      localStorage.removeItem(STORAGE_KEY);
+      saved = {};
       chat.innerHTML = '';
       restartFlow();
     }
@@ -412,37 +450,16 @@ function addTyping(){
 }
 function removeTyping(){ const t=document.getElementById('typing'); if(t) t.remove(); }
 
-async function botSay(html,delay=800){
-  addTyping();
-  await new Promise(r=>setTimeout(r,delay));
-  removeTyping();
-  await addBubble(html,'in');
-}
-
-function addChips(options, onSelect){
-  const wrap=document.createElement('div'); wrap.className='chips';
-  options.forEach(opt=>{
-    const btn=document.createElement('button'); btn.className='chip';
-    btn.textContent=typeof opt==='object'?opt.label:opt;
-    btn.addEventListener('click',()=>{
-      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
-      btn.classList.add('selected');
-      const txt=btn.textContent;
-      addBubble(txt,'out');
-      setTimeout(()=>wrap.remove(),300);
-      onSelect(typeof opt==='object'?opt.value:opt, txt);
-    });
-    wrap.appendChild(btn);
-  });
-  chat.appendChild(wrap); scrollBottom();
-}
-
-// ─── FLOW INITIATION ─────────────────────────────────────────────────────────
 async function startFlow(){
   const hasHistory = loadHistory();
+  const itemsQuery = params.get('items') || '';
+  const lastItemsQuery = localStorage.getItem(`mp_last_items_${BIZ_ID}`) || '';
+  const isNewRequest = itemsQuery && (!hasHistory || itemsQuery !== lastItemsQuery);
 
   // 1. Simulate WhatsApp outgoing order message
-  if (order.items && order.items.length > 0) {
+  if (isNewRequest) {
+    localStorage.setItem(`mp_last_items_${BIZ_ID}`, itemsQuery);
+    
     if (!hasHistory) {
       addDatePill('Today');
     } else {
@@ -498,15 +515,14 @@ async function startFlow(){
       order.location = saved.location;
 
       await botSay(`Welcome back, <b>${order.name}</b>! Let's get this confirmed.`, 600);
-      
-      setTimeout(async () => { await askDelivery(hasDeliveryItem); }, 800);
+      await askDelivery(hasDeliveryItem);
     } else {
       // New customer
       await botSay(`May I know your good name?`, 850);
       step = 1; setInput('text');
     }
   } else {
-    // Opened chat generically with NO items selected
+    // Opened chat generically with NO items selected or page refresh
     if (!hasHistory) {
       addDatePill('Today');
       await botSay(`Namaste! How can I help you today?`, 600);
@@ -607,28 +623,17 @@ function showMapPicker() {
 
   wrap.querySelector('#openMapBtn').addEventListener('click',()=>{
     openMapOverlay(loc=>{
-      order.location = loc;
-      saved.location = loc;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      tempCoords = { lat: loc.lat, lng: loc.lng };
       wrap.remove();
-
-      // Confirmed Location bubble
-      const conf=document.createElement('div'); conf.className='msg out';
-      conf.innerHTML=`
-        <div class="bubble" style="max-width:90%">
-          <div class="loc-confirmed">
-            <div class="la"><b>${loc.label}</b><br><span style="color:#666;font-size:10px">${loc.fullAddress}</span></div>
-          </div>
-          <span class="time">${now()} <span class="tick">✓✓</span></span>
-        </div>`;
-      chat.appendChild(conf); scrollBottom();
-
-      // Record location in history
-      recordHistory({ type: 'loc-confirmed', label: loc.label, address: loc.fullAddress, time: now() });
-
-      setTimeout(()=>askBuyExtra(), 600);
+      askCustomAddress();
     });
   });
+}
+
+async function askCustomAddress() {
+  await botSay(`We got your map coordinates! 📍<br>Please type your house number, building, or landmark in <b>${BIZ_TOWN}</b> (e.g. near Shiva temple, ward 4):`, 600);
+  step = 5;
+  setInput('text');
 }
 
 async function askBuyExtra() {
@@ -651,68 +656,65 @@ async function askNotes() {
   step = 10; setInput('text');
 }
 
-function showSummary() {
-  botSay(`Here is your order summary 👇`);
-  setTimeout(()=>{
-    let subtotal = 0;
-    order.items.forEach(it => { subtotal += it.price * it.quantity; });
-    const isDelivery = order.delivery === 'delivery';
-    const hasDeliveryItem = checkItemsForDelivery();
-    const deliveryChargeVal = (isDelivery && hasDeliveryItem) 
-      ? (parseFloat(BIZ_DELIVERY_CHARGES.replace(/[^0-9.]/g, '')) || 0) 
-      : 0;
-    const total = subtotal + deliveryChargeVal;
+async function showSummary() {
+  await botSay(`Here is your order summary 👇`, 600);
+  
+  let subtotal = 0;
+  order.items.forEach(it => { subtotal += it.price * it.quantity; });
+  const isDelivery = order.delivery === 'delivery';
+  const hasDeliveryItem = checkItemsForDelivery();
+  const deliveryChargeVal = (isDelivery && hasDeliveryItem) 
+    ? (parseFloat(BIZ_DELIVERY_CHARGES.replace(/[^0-9.]/g, '')) || 0) 
+    : 0;
+  const total = subtotal + deliveryChargeVal;
 
-    const rows=[
-      ['Seller', BIZ_NAME + ', ' + BIZ_TOWN],
-      ['Customer', order.name],
-      ['Phone', order.phone],
-      ['Items', order.items.map(it=> {
-        let s = `${it.name} ${it.variant ? `(${it.variant})` : ''} x ${it.quantity}`;
-        if (it.booking_date) {
-          s += `<br><span style="font-size:10.5px;color:#555;display:inline-block;margin-top:2px;">📅 ${it.booking_date}${it.booking_time ? ` @ ${it.booking_time}` : ''}</span>`;
-        }
-        return s;
-      }).join('<br>') || 'None'],
-    ];
-
-    if (hasDeliveryItem) {
-      rows.push(['Type', isDelivery ? 'Home Delivery' : 'Direct Booking / Shop Pickup']);
-      if(isDelivery && order.location) {
-        rows.push(['Location', order.location.label]);
-        rows.push(['Delivery Fee', `₹${BIZ_DELIVERY_CHARGES} (may vary by distance)`]);
+  const rows=[
+    ['Seller', BIZ_NAME + ', ' + BIZ_TOWN],
+    ['Customer', order.name],
+    ['Phone', order.phone],
+    ['Items', order.items.map(it=> {
+      let s = `${it.name} ${it.variant ? `(${it.variant})` : ''} x ${it.quantity}`;
+      if (it.booking_date) {
+        s += `<br><span style="font-size:10.5px;color:#555;display:inline-block;margin-top:2px;">📅 ${it.booking_date}${it.booking_time ? ` @ ${it.booking_time}` : ''}</span>`;
       }
-      rows.push(['Payment', isDelivery ? 'Cash on Delivery (COD)' : 'To be confirmed on call/chat']);
-    } else {
-      rows.push(['Type', 'Standard Booking']);
-      rows.push(['Payment', 'To be confirmed on call/chat']);
+      return s;
+    }).join('<br>') || 'None'],
+  ];
+
+  if (hasDeliveryItem) {
+    rows.push(['Type', isDelivery ? 'Home Delivery' : 'Direct Booking / Shop Pickup']);
+    if(isDelivery && order.location) {
+      rows.push(['Location', order.location.label]);
+      rows.push(['Delivery Fee', `₹${BIZ_DELIVERY_CHARGES} (may vary by distance)`]);
     }
+    rows.push(['Payment', isDelivery ? 'Cash on Delivery (COD)' : 'To be confirmed on call/chat']);
+  } else {
+    rows.push(['Type', 'Standard Booking']);
+    rows.push(['Payment', 'To be confirmed on call/chat']);
+  }
 
-    if(order.notes && order.notes.toLowerCase() !== 'no') {
-      rows.push(['Notes', order.notes]);
-    }
-    rows.push(['Total Bill', `₹${total}`]);
+  if(order.notes && order.notes.toLowerCase() !== 'no') {
+    rows.push(['Notes', order.notes]);
+  }
+  rows.push(['Total Bill', `₹${total}`]);
 
-    const rowsHTML=rows.map(([k,v])=>`<div class="sum-row"><span class="sum-key">${k}</span><span class="sum-val">${v}</span></div>`).join('');
-    const wrap=document.createElement('div'); wrap.className='msg in';
-    wrap.innerHTML=`<div class="bubble" style="max-width:94%;padding:0"><div class="summary-card"><div class="sum-header">Order Summary</div>${rowsHTML}</div><span class="time" style="padding:0 8px 6px;display:block">${now()}</span></div>`;
-    chat.appendChild(wrap); scrollBottom();
+  const rowsHTML=rows.map(([k,v])=>`<div class="sum-row"><span class="sum-key">${k}</span><span class="sum-val">${v}</span></div>`).join('');
+  const wrap=document.createElement('div'); wrap.className='msg in';
+  wrap.innerHTML=`<div class="bubble" style="max-width:94%;padding:0"><div class="summary-card"><div class="sum-header">Order Summary</div>${rowsHTML}</div><span class="time" style="padding:0 8px 6px;display:block">${now()}</span></div>`;
+  chat.appendChild(wrap); scrollBottom();
 
-    // Record summary card in history
-    recordHistory({ type: 'summary', html: wrap.querySelector('.summary-card').outerHTML });
+  // Record summary card in history
+  recordHistory({ type: 'summary', html: wrap.querySelector('.summary-card').outerHTML });
 
-    setTimeout(()=>{
-      botSay(`Is everything correct?`);
-      addChips([
-        {label:'Confirm Order', value:'confirm'},
-        {label:'Start Over', value:'restart'}
-      ], (val)=>{
-        if(val==='confirm') confirmOrder();
-        else restartFlow();
-      });
-      setInput('none');
-    }, 600);
-  }, 950);
+  await botSay(`Is everything correct?`, 600);
+  addChips([
+    {label:'Confirm Order', value:'confirm'},
+    {label:'Start Over', value:'restart'}
+  ], (val)=>{
+    if(val==='confirm') confirmOrder();
+    else restartFlow();
+  });
+  setInput('none');
 }
 
 async function confirmOrder(){
@@ -787,6 +789,7 @@ async function confirmOrder(){
     saved.phone = order.phone;
     saved.location = order.location;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    localStorage.removeItem(`mp_last_items_${BIZ_ID}`);
 
     const paymentPrompt = isDelivery 
       ? '<div style="font-size:10px;color:#999;margin-top:8px">Cash on Delivery (COD)</div>' 
@@ -809,16 +812,22 @@ async function confirmOrder(){
     console.error("Failed placing order:", err);
     removeTyping();
     const errMsg = err.message || err.details || JSON.stringify(err);
-    botSay(`Order submission failed: <b>${errMsg}</b>.<br>Please try confirming again.`, 500);
-    // Add chip to retry
+    await botSay(`Order submission failed: <b>${errMsg}</b>.<br>Please try confirming again.`, 500);
     addChips([{label:'Retry Confirm Order', value:'confirm'}], () => confirmOrder());
   }
 }
 
 function restartFlow(){
   chat.innerHTML='';
-  Object.assign(order, { name:'', phone:'', delivery:'', location:null, items: PRE_ITEMS, notes:'' });
-  saved = {}; localStorage.removeItem(STORAGE_KEY);
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e){}
+  Object.assign(order, {
+    name: saved.name || '',
+    phone: saved.phone || '',
+    delivery: '',
+    location: saved.location || null,
+    items: PRE_ITEMS,
+    notes: ''
+  });
   step = 0; startFlow();
 }
 
@@ -878,6 +887,43 @@ function handleSend(){
         const hasDel = checkItemsForDelivery();
         await askDelivery(hasDel);
       });
+
+  } else if(step===5){
+    const addrName=val.trim();
+    if(addrName.length < 3){
+      addBubble(val,'out');
+      botSay(`Please write a descriptive landmark or house name (at least 3 characters).`);
+      return;
+    }
+    addBubble(val,'out');
+    const fullAddress = `${BIZ_TOWN}, ${addrName}`;
+    const loc = {
+      label: addrName,
+      fullAddress: fullAddress,
+      lat: tempCoords ? tempCoords.lat : (BIZ_LATITUDE || 31.9),
+      lng: tempCoords ? tempCoords.lng : (BIZ_LONGITUDE || 77.1)
+    };
+    
+    order.location = loc;
+    saved.location = loc;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    
+    // Confirmed Location bubble
+    const conf=document.createElement('div'); conf.className='msg out';
+    conf.innerHTML=`
+      <div class="bubble" style="max-width:90%">
+        <div class="loc-confirmed">
+          <div class="la"><b>${loc.label}</b><br><span style="color:#666;font-size:10px">${loc.fullAddress}</span></div>
+        </div>
+        <span class="time">${now()} <span class="tick">✓✓</span></span>
+      </div>`;
+    chat.appendChild(conf); scrollBottom();
+    
+    recordHistory({ type: 'loc-confirmed', label: loc.label, address: loc.fullAddress, time: now() });
+    
+    step = 0;
+    setInput('none');
+    setTimeout(() => askBuyExtra(), 600);
 
   } else if(step===10){
     addBubble(val,'out'); order.notes=val; step=11; setInput('none'); showSummary();
