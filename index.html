@@ -239,6 +239,7 @@ const BIZ_WHATSAPP = params.get('biz_whatsapp') || '';
 const BIZ_DP = params.get('biz_dp') || '';
 const BIZ_USERNAME = params.get('biz_username') || '';
 const BIZ_AREA_SLUG = params.get('biz_area_slug') || '';
+let BIZ_AREA_ID = null;
 
 // Parse Items passed in query params
 let PRE_ITEMS = [];
@@ -584,6 +585,9 @@ async function startFlow(){
       .order('is_featured', { ascending: false })
       .order('created_at', { ascending: false })
       .then(({data}) => { listingsList = data || []; });
+
+    sbMain.from('businesses').select('area_id').eq('id', BIZ_ID).maybeSingle()
+      .then(({data}) => { if (data && data.area_id) BIZ_AREA_ID = data.area_id; });
   }
 }
 
@@ -816,6 +820,17 @@ async function confirmOrder(){
 
     if(oErr) throw oErr;
     if(!ordData) throw new Error("Could not submit order details.");
+
+    if (order.delivery === 'delivery') {
+      const { error: delErr } = await sbLeads.from('delivery').insert({
+        order_id: ordData.id,
+        area_id: BIZ_AREA_ID,
+        status: 'pending'
+      });
+      if (delErr) {
+        console.error("Failed to insert delivery log:", delErr);
+      }
+    }
 
     removeTyping();
     const ref = 'MP' + ordData.id.slice(0, 6).toUpperCase();
