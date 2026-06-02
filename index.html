@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>MyPahad – Order Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet"/>
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --g:#1a5c3a;--gl:#e8f5ee;--ac:#e05a2b;
+  --bg:#ece5dd;--t:#111;--t2:#4a4a4a;--t3:#888;
+  --bd:#ddd;--r:6px;--rs:4px;
+  --bubble-in:#fff;--bubble-out:#d9fdd3;
+  --header:#128C7E;--header2:#075E54;
+}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);}
+body{display:flex;flex-direction:column;width:100%;max-width:100%;margin:0 auto;position:relative;}
+
+/* HEADER */
+.header{
+  background:linear-gradient(135deg,var(--header2),var(--header));
+  padding:10px 16px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.15);
+  width:100%;
+}
+.h-dp-ph{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;color:white;}
+.h-info{flex:1;}
+.h-name{font-size:14px;font-weight:600;color:#fff;line-height:1.2;}
+.h-sub{font-size:10.5px;color:rgba(255,255,255,0.85);margin-top:2px;}
+.h-badge{background:rgba(255,255,255,0.15);border-radius:20px;padding:3px 9px;font-size:9.5px;color:#fff;font-weight:600;}
+#clearChatBtn:hover{background:rgba(255,255,255,0.3) !important;}
+
+/* CHAT AREA */
+.chat{flex:1;overflow-y:auto;padding:14px 16px 84px;position:relative;z-index:1;background:var(--bg);width:100%;}
+.chat::-webkit-scrollbar{width:4px;}
+.chat::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.15);border-radius:2px;}
+
+/* DATE PILL */
+.date-pill{text-align:center;margin:10px 0;}
+.date-pill span{background:rgba(255,255,255,0.8);font-size:10px;color:#666;padding:3px 10px;border-radius:10px;}
+
+/* BUBBLES */
+.msg{display:flex;margin-bottom:6px;animation:pop .18s ease;}
+@keyframes pop{from{opacity:0;transform:scale(0.97)}to{opacity:1;transform:scale(1)}}
+.msg.in{justify-content:flex-start;}
+.msg.out{justify-content:flex-end;}
+.bubble{max-width:80%;padding:8px 12px 6px;border-radius:8px;font-size:13px;line-height:1.5;position:relative;box-shadow:0 1px 2px rgba(0,0,0,0.08);word-wrap:break-word;white-space:pre-wrap;}
+.msg.in .bubble{background:var(--bubble-in);border-top-left-radius:2px;color:var(--t);}
+.msg.out .bubble{background:var(--bubble-out);border-top-right-radius:2px;color:var(--t);}
+.bubble .time{font-size:9.5px;color:#999;float:right;margin-left:10px;margin-top:4px;}
+.msg.out .bubble .time{color:#7cad7e;}
+.tick{margin-left:2px;color:#7cad7e;font-size:10px;}
+
+/* TYPING */
+.typing-bubble{background:var(--bubble-in);padding:10px 14px;border-radius:8px;border-top-left-radius:2px;display:inline-flex;gap:4px;align-items:center;box-shadow:0 1px 2px rgba(0,0,0,0.08);}
+.dot{width:6px;height:6px;border-radius:50%;background:#bbb;animation:bounce 1.2s infinite;}
+.dot:nth-child(2){animation-delay:.2s;}
+.dot:nth-child(3){animation-delay:.4s;}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+
+/* CHIPS */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0;justify-content:flex-end;width:100%;}
+.chip{background:#fff;border:1.5px solid var(--g);color:var(--g);border-radius:18px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;}
+.chip:hover,.chip:active{background:var(--g);color:#fff;}
+.chip.selected{background:var(--g);color:#fff;pointer-events:none;opacity:0.85;}
+
+/* INPUT BAR */
+.input-bar{position:fixed;bottom:0;left:0;right:0;background:#f0f0f0;border-top:1px solid #ddd;padding:10px 14px;display:flex;gap:10px;align-items:flex-end;z-index:100;width:100%;}
+.inp-wrap{flex:1;background:#fff;border-radius:22px;padding:8px 16px;min-height:40px;display:flex;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:1px solid #ddd;}
+.inp-wrap input{border:none;outline:none;width:100%;font-family:inherit;font-size:13px;background:transparent;color:#111;}
+.inp-wrap input::placeholder{color:#aaa;}
+.send-btn{width:40px;height:40px;border-radius:50%;background:var(--header);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .15s;}
+.send-btn:hover{background:var(--header2);}
+.send-btn svg{fill:#fff;width:18px;height:18px;}
+.send-btn:disabled{background:#ccc;cursor:default;}
+
+/* EXTRA ITEMS LIST INLINE POPUP */
+.extra-sheet{position:fixed;bottom:58px;left:0;right:0;background:#fff;border-top:1px solid #ddd;z-index:90;display:none;flex-direction:column;max-height:360px;box-shadow:0 -4px 15px rgba(0,0,0,0.1);}
+.extra-sheet.open{display:flex;}
+.extra-header{padding:10px 14px;background:#f8f8f8;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:between;}
+.extra-header h4{font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:0.05em;}
+.extra-close{background:none;border:none;font-size:18px;color:#aaa;cursor:pointer;}
+.extra-list{flex:1;overflow-y:auto;padding:8px 12px;display:flex;flex-direction:column;gap:6px;}
+.extra-item{display:flex;gap:10px;align-items:center;padding:6px;border:1px solid #eee;border-radius:var(--r);background:#fff;}
+.extra-img{width:40px;height:40px;border-radius:var(--rs);object-fit:cover;flex-shrink:0;border:1px solid #ddd;}
+.extra-ph{width:40px;height:40px;border-radius:var(--rs);background:var(--gl);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.extra-info{flex:1;min-width:0;}
+.extra-name{font-size:11.5px;font-weight:700;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.extra-price{font-size:10px;color:var(--g);font-weight:600;margin-top:1px;}
+.extra-ctrls{display:flex;align-items:center;gap:6px;}
+.extra-btn{width:22px;height:22px;border-radius:50%;border:1px solid #ddd;background:#fff;font-size:12px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.extra-qty{font-size:11px;font-weight:bold;min-width:14px;text-align:center;}
+.extra-footer{padding:8px 12px;background:#f8f8f8;border-top:1px solid #eee;}
+.extra-confirm{width:100%;background:var(--g);color:#fff;border:none;border-radius:var(--rs);padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:0.03em;}
+
+/* MAP MODAL OVERLAY */
+.map-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.5);
+  z-index:500;display:flex;flex-direction:column;
+  align-items:center;justify-content:flex-end;
+}
+.map-sheet{
+  width:100%;max-width:480px;border-radius:18px 18px 0 0;
+  overflow:hidden;display:flex;flex-direction:column;max-height:90vh;
+  background:#fff;box-shadow:0 -4px 20px rgba(0,0,0,0.15);
+}
+.map-sheet-header{padding:12px 16px;background:var(--g);display:flex;align-items:center;justify-content:space-between;}
+.map-sheet-header h3{color:#fff;font-size:13px;font-weight:600;}
+.map-close-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:50%;width:26px;height:26px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+#leaflet-map{width:100%;height:300px;flex-shrink:0;background:#e5e3db;}
+.map-geocode-bar{padding:10px 14px;background:#f8f8f8;border-top:1px solid #eee;display:flex;align-items:center;gap:8px;}
+.map-geocode-bar input{flex:1;border:1px solid #ddd;border-radius:6px;padding:8px 12px;font-size:12px;outline:none;font-family:inherit;}
+.map-geocode-bar input:focus{border-color:var(--g);}
+.map-search-btn{background:var(--g);border:none;color:#fff;border-radius:6px;padding:8px 14px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.map-addr-bar{padding:10px 16px;background:#fff;border-top:1px solid #eee;min-height:56px;}
+.map-addr-bar .addr-label{font-size:9.5px;color:var(--t3);margin-bottom:3px;font-weight:700;letter-spacing:0.04em;}
+.map-addr-bar .addr-text{font-size:12px;color:var(--t);font-weight:500;line-height:1.4;}
+.map-addr-bar .addr-text.loading{color:#aaa;font-style:italic;}
+.map-confirm-btn{display:block;width:calc(100% - 28px);margin:10px 14px;background:var(--g);color:#fff;border:none;border-radius:var(--r);padding:12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:0.02em;}
+.map-confirm-btn:disabled{background:#bbb;cursor:not-allowed;}
+.map-hint{text-align:center;font-size:9.5px;color:#888;padding:4px 12px 0;}
+
+/* MAP BUTTON in chat */
+.map-tap-btn{background:linear-gradient(135deg,#e8f5ee,#c8e6da);border:1.5px dashed var(--g);border-radius:8px;padding:14px;text-align:center;cursor:pointer;width:100%;margin-top:4px;font-family:inherit;}
+.map-tap-btn .mt{font-size:12px;font-weight:600;color:var(--g);}
+.map-tap-btn .ms{font-size:10px;color:#555;margin-top:3px;}
+
+/* CONFIRMED LOCATION */
+.loc-confirmed{background:#d9fdd3;border-radius:8px;padding:10px 12px;display:flex;align-items:flex-start;gap:8px;margin-top:4px;}
+.loc-confirmed .la{font-size:11.5px;color:#333;line-height:1.5;}
+.loc-confirmed .la b{font-size:12.5px;}
+
+/* SUMMARY CARD */
+.summary-card{background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e0e0e0;margin-top:4px;}
+.sum-header{background:var(--g);padding:8px 12px;color:#fff;font-size:12px;font-weight:600;}
+.sum-row{display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #f0f0f0;font-size:11.5px;}
+.sum-row:last-child{border-bottom:none;}
+.sum-key{color:#666;}
+.sum-val{font-weight:600;color:#111;text-align:right;max-width:65%;}
+
+/* DONE CARD */
+.done-card{background:#fff;border-radius:12px;padding:18px;text-align:center;border:1px solid #e0e0e0;margin-top:4px;}
+.done-title{font-size:15px;font-weight:700;color:var(--g);margin-bottom:6px;}
+.done-sub{font-size:11.5px;color:#666;line-height:1.6;}
+.done-ref{background:var(--gl);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--g);margin-top:10px;display:inline-block;letter-spacing:1px;}
+
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="h-dp-ph" id="hDp">P</div>
+  <div class="h-info">
+    <div class="h-name" id="hName">Loading Store...</div>
+    <div class="h-sub" id="hSub">Connecting...</div>
+  </div>
+  <button id="clearChatBtn" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:10px;font-weight:600;cursor:pointer;padding:4px 10px;border-radius:12px;font-family:inherit;transition:all 0.15s;margin-right:8px;outline:none;">Clear Chat</button>
+  <div class="h-badge">Order Agent</div>
+</div>
+
+<!-- CHAT -->
+<div class="chat" id="chat"></div>
+
+<!-- EXTRA ITEMS POPUP (hidden by default) -->
+<div class="extra-sheet" id="extraSheet">
+  <div class="extra-header">
+    <h4>Add More Items</h4>
+    <button class="extra-close" onclick="closeExtraSheet()">&times;</button>
+  </div>
+  <div class="extra-list" id="extraList"></div>
+  <div class="extra-footer">
+    <button class="extra-confirm" onclick="confirmExtraItems()">Confirm Selection</button>
+  </div>
+</div>
+
+<!-- INPUT BAR -->
+<div class="input-bar">
+  <div class="inp-wrap">
+    <input type="text" id="userInput" placeholder="Type a message..." autocomplete="off"/>
+  </div>
+  <button class="send-btn" id="sendBtn" disabled>
+    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+  </button>
+</div>
+
+<!-- MAP OVERLAY (hidden by default) -->
+<div class="map-overlay hidden" id="mapOverlay">
+  <div class="map-sheet">
+    <div class="map-sheet-header">
+      <h3>Pin Your Delivery Location</h3>
+      <button class="map-close-btn" id="mapCloseBtn">✕</button>
+    </div>
+    <div class="map-geocode-bar">
+      <input type="text" id="searchInput" placeholder="Search village, area, town in HP..."/>
+      <button class="map-search-btn" id="searchBtn">Search</button>
+    </div>
+    <div id="leaflet-map"></div>
+    <div class="map-hint">Drag the pin to adjust to your exact house / street</div>
+    <div class="map-addr-bar">
+      <div class="addr-label">SELECTED ADDRESS</div>
+      <div class="addr-text loading" id="addrText">Move the pin to see address...</div>
+    </div>
+    <button class="map-confirm-btn" id="mapConfirmBtn" disabled>Confirm Location</button>
+  </div>
+</div>
+
+<script>
+// ─── PARSE URL CONTEXT ───────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+const BIZ_ID = params.get('biz_id');
+const BIZ_NAME = params.get('biz_name') || 'Pahadi Store';
+const BIZ_TOWN = params.get('biz_town') || 'Rampur Bushahr';
+const BIZ_DELIVERY_CHARGES = params.get('biz_delivery_charges') || '0';
+const BIZ_LATITUDE = parseFloat(params.get('biz_latitude')) || null;
+const BIZ_LONGITUDE = parseFloat(params.get('biz_longitude')) || null;
+const BIZ_WHATSAPP = params.get('biz_whatsapp') || '';
+const BIZ_DP = params.get('biz_dp') || '';
+const BIZ_USERNAME = params.get('biz_username') || '';
+const BIZ_AREA_SLUG = params.get('biz_area_slug') || '';
+
+// Parse Items passed in query params
+let PRE_ITEMS = [];
+try {
+  const itemsStr = params.get('items');
+  if (itemsStr) {
+    PRE_ITEMS = JSON.parse(itemsStr);
+  }
+} catch(e) {
+  console.warn("Failed parsing items query string:", e);
+}
+
+// ─── SUPABASE INITIALIZATION ────────────────────────────────────────────────
+const MAIN_DB_URL = 'https://khbotkadtbkwqxjxlyhm.supabase.co';
+const MAIN_DB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoYm90a2FkdGJrd3F4anhseWhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NTU4OTAsImV4cCI6MjA4ODUzMTg5MH0.MnNTuoONyBTGZeO1qYyRUTtkRdFreK0OrOcYk66pWxs';
+
+const LEADS_DB_URL = 'https://rcyvtdmvimqvsrglrnwv.supabase.co';
+const LEADS_DB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtoYm90a2FkdGJrd3F4anhseWhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NTU4OTAsImV4cCI6MjA4ODUzMTg5MH0.MnNTuoONyBTGZeO1qYyRUTtkRdFreK0OrOcYk66pWxs'; // fallback, replaced with actual key in leads client
+const LEADS_REAL_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJjeXZ0ZG12aW1xdnNyZ2xybnd2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTQ1NTAsImV4cCI6MjA5NTk3MDU1MH0.kRvgihk-ZIT82L8W3vR9T0QASoCDeEsNwVsh7851KRk';
+
+const sbMain = supabase.createClient(MAIN_DB_URL, MAIN_DB_KEY);
+const sbLeads = supabase.createClient(LEADS_DB_URL, LEADS_REAL_KEY);
+
+// ─── STATE ──────────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'mypahad_customer';
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e){}
+
+const order = {
+  name: saved.name || '',
+  phone: saved.phone || '',
+  delivery: '',
+  location: saved.location || null,
+  items: PRE_ITEMS,
+  notes: ''
+};
+
+let step = 0;
+let listingsList = []; // store owner's catalog
+let extraQuantities = {}; // tracking selections for add extra
+let mapInitialized = false;
+
+const chat    = document.getElementById('chat');
+const input   = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+
+// ─── SETUP HEADER ───────────────────────────────────────────────────────────
+document.getElementById('hName').textContent = BIZ_NAME;
+document.getElementById('hSub').textContent = `🟢 ${BIZ_TOWN} • Active`;
+
+const dpEl = document.getElementById('hDp');
+if (BIZ_DP) {
+  let optimizedDp = BIZ_DP;
+  if (BIZ_DP.includes('res.cloudinary.com/ddnuuxh9t/image/upload/')) {
+    optimizedDp = BIZ_DP.replace('/image/upload/', '/image/upload/w_100,h_100,c_fill,f_auto,q_auto/');
+  }
+  dpEl.innerHTML = `<img src="${optimizedDp}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;" />`;
+} else if (BIZ_NAME && BIZ_NAME.length > 0) {
+  dpEl.innerHTML = `<span id="hDpTxt">${BIZ_NAME.charAt(0).toUpperCase()}</span>`;
+}
+
+// Redirect to profile on name / DP click
+const profileUrl = (BIZ_USERNAME && BIZ_AREA_SLUG) 
+  ? `https://mypahad.in/${BIZ_USERNAME}-in-${BIZ_AREA_SLUG}` 
+  : 'https://mypahad.in';
+
+document.getElementById('hName').style.cursor = 'pointer';
+document.getElementById('hName').addEventListener('click', () => { window.open(profileUrl, '_blank'); });
+dpEl.style.cursor = 'pointer';
+dpEl.addEventListener('click', () => { window.open(profileUrl, '_blank'); });
+
+input.addEventListener('input', () => { sendBtn.disabled = input.value.trim() === ''; });
+input.addEventListener('keydown', e => { if(e.key==='Enter' && !sendBtn.disabled) handleSend(); });
+sendBtn.addEventListener('click', handleSend);
+
+const clearChatBtn = document.getElementById('clearChatBtn');
+if (clearChatBtn) {
+  clearChatBtn.addEventListener('click', () => {
+    if (confirm("Are you sure you want to clear chat history with this seller?")) {
+      localStorage.removeItem(`mp_chat_history_${BIZ_ID}`);
+      chat.innerHTML = '';
+      restartFlow();
+    }
+  });
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function now(){ return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); }
+function scrollBottom(){ setTimeout(()=>chat.scrollTo({top:chat.scrollHeight,behavior:'smooth'}),80); }
+
+function setInput(mode){
+  if(mode==='none'){
+    input.value=''; input.disabled=true;
+    input.placeholder='Choose an option above...'; sendBtn.disabled=true;
+  } else {
+    input.disabled=false; input.placeholder='Type a message...'; input.focus();
+  }
+}
+
+function cleanName(raw){
+  const stop=new Set(['i','m','me','my','im','am','hi','hey','the','a','an','and','or','is','mai','mera','meri','main','haan','ha','ok','okay','hello','namaste']);
+  const words=raw.trim().split(/\s+/).filter(w=>w.length>1&&!stop.has(w.toLowerCase()));
+  return words.slice(0,3).map(w=>w.charAt(0).toUpperCase()+w.slice(1).toLowerCase()).join(' ');
+}
+function isValidPhone(p){ return /^[6-9]\d{9}$/.test(p.replace(/\D/g,'')); }
+
+// ─── HISTORY CACHING ──────────────────────────────────────────────────────────
+function recordHistory(msgObj) {
+  if (!BIZ_ID) return;
+  try {
+    const hist = JSON.parse(localStorage.getItem(`mp_chat_history_${BIZ_ID}`) || '[]');
+    hist.push(msgObj);
+    localStorage.setItem(`mp_chat_history_${BIZ_ID}`, JSON.stringify(hist));
+  } catch(e){}
+}
+
+function loadHistory() {
+  if (!BIZ_ID) return false;
+  try {
+    const hist = JSON.parse(localStorage.getItem(`mp_chat_history_${BIZ_ID}`) || '[]');
+    if (hist.length === 0) return false;
+    
+    hist.forEach(msg => {
+      if (msg.type === 'bubble') {
+        const w=document.createElement('div'); w.className=`msg ${msg.dir}`;
+        w.innerHTML=`<div class="bubble">${msg.html}<span class="time">${msg.time || now()}${msg.dir==='out'?` <span class="tick">✓✓</span>`:''}</span></div>`;
+        chat.appendChild(w);
+      } else if (msg.type === 'date') {
+        const dp=document.createElement('div'); dp.className='date-pill';
+        dp.innerHTML=`<span>${msg.text}</span>`; chat.appendChild(dp);
+      } else if (msg.type === 'summary') {
+        const w=document.createElement('div'); w.className='msg in';
+        w.innerHTML=`<div class="bubble" style="max-width:94%;padding:0">${msg.html}</div>`;
+        chat.appendChild(w);
+      } else if (msg.type === 'done') {
+        const w=document.createElement('div'); w.className='msg in';
+        w.innerHTML=`<div class="bubble" style="max-width:94%;padding:4px">${msg.html}</div>`;
+        chat.appendChild(w);
+      } else if (msg.type === 'loc-confirmed') {
+        const conf=document.createElement('div'); conf.className='msg out';
+        conf.innerHTML=`
+          <div class="bubble" style="max-width:90%">
+            <div class="loc-confirmed">
+              <div class="la"><b>${msg.label}</b><br><span style="color:#666;font-size:10px">${msg.address}</span></div>
+            </div>
+            <span class="time">${msg.time || now()} <span class="tick">✓✓</span></span>
+          </div>`;
+        chat.appendChild(conf);
+      }
+    });
+    scrollBottom();
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// ─── BUBBLES ─────────────────────────────────────────────────────────────────
+function addBubble(html,dir='in',delay=0,save=true){
+  return new Promise(res=>{
+    setTimeout(()=>{
+      const w=document.createElement('div'); w.className=`msg ${dir}`;
+      w.innerHTML=`<div class="bubble">${html}<span class="time">${now()}${dir==='out'?` <span class="tick">✓✓</span>`:''}</span></div>`;
+      chat.appendChild(w); scrollBottom();
+      if (save) {
+        recordHistory({ type: 'bubble', dir, html, time: now() });
+      }
+      res();
+    },delay);
+  });
+}
+
+function addDatePill(text, save=true) {
+  const dp=document.createElement('div'); dp.className='date-pill';
+  dp.innerHTML=`<span>${text}</span>`; chat.appendChild(dp); scrollBottom();
+  if (save) {
+    recordHistory({ type: 'date', text });
+  }
+}
+function addTyping(){
+  const w=document.createElement('div'); w.className='msg in'; w.id='typing';
+  w.innerHTML=`<div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+  chat.appendChild(w); scrollBottom();
+}
+function removeTyping(){ const t=document.getElementById('typing'); if(t) t.remove(); }
+
+async function botSay(html,delay=800){
+  addTyping();
+  await new Promise(r=>setTimeout(r,delay));
+  removeTyping();
+  await addBubble(html,'in');
+}
+
+function addChips(options, onSelect){
+  const wrap=document.createElement('div'); wrap.className='chips';
+  options.forEach(opt=>{
+    const btn=document.createElement('button'); btn.className='chip';
+    btn.textContent=typeof opt==='object'?opt.label:opt;
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+      btn.classList.add('selected');
+      const txt=btn.textContent;
+      addBubble(txt,'out');
+      setTimeout(()=>wrap.remove(),300);
+      onSelect(typeof opt==='object'?opt.value:opt, txt);
+    });
+    wrap.appendChild(btn);
+  });
+  chat.appendChild(wrap); scrollBottom();
+}
+
+// ─── FLOW INITIATION ─────────────────────────────────────────────────────────
+async function startFlow(){
+  const hasHistory = loadHistory();
+
+  // 1. Simulate WhatsApp outgoing order message
+  if (order.items && order.items.length > 0) {
+    if (!hasHistory) {
+      addDatePill('Today');
+    } else {
+      addDatePill('New Request');
+    }
+
+    let preMsg = `*New Order / Inquiry from MyPahad*\n\n`;
+    let totalOrder = 0;
+    order.items.forEach((item, idx) => {
+      const price = parseFloat(item.price) || 0;
+      const itemTotal = item.quantity * price;
+      totalOrder += itemTotal;
+
+      preMsg += `${idx + 1}. *${item.name}*\n`;
+      if (item.variant) preMsg += `   - Option: ${item.variant}\n`;
+      if (item.booking_date) preMsg += `   - Booking Date/Time: ${item.booking_date} ${item.booking_time || 'Same Day'}\n`;
+      preMsg += `   - Quantity: ${item.quantity} ${item.qty_label || 'Quantity'}\n`;
+      preMsg += `   - Price: ₹${price || '—'}\n`;
+      preMsg += `   - Total: ₹${itemTotal}\n\n`;
+    });
+
+    const hasDeliveryItem = checkItemsForDelivery();
+    if (hasDeliveryItem && BIZ_DELIVERY_CHARGES && BIZ_DELIVERY_CHARGES !== '0') {
+      preMsg += `Delivery Charges: ${BIZ_DELIVERY_CHARGES}\n\n`;
+    }
+    preMsg += `*Order Subtotal: ₹${totalOrder}*\n\n`;
+    preMsg += `Please confirm availability. Thank you!`;
+
+    await addBubble(preMsg, 'out', 300);
+
+    // Bot responds and greets
+    await botSay(`Namaste! Thank you for your order request.`, 600);
+
+    if (saved.name && saved.phone) {
+      // Returning customer – check leads DB to ensure profile matches
+      try {
+        const { data } = await sbLeads.from('customers').select('*').eq('phone', saved.phone).single();
+        if (data) {
+          saved.name = data.name;
+          if (data.saved_address) {
+            saved.location = {
+              label: data.saved_address.split(',')[0] || 'Saved Location',
+              fullAddress: data.saved_address,
+              lat: parseFloat(data.saved_lat),
+              lng: parseFloat(data.saved_lng)
+            };
+          }
+        }
+      } catch(e){}
+
+      order.name = saved.name;
+      order.phone = saved.phone;
+      order.location = saved.location;
+
+      await botSay(`Welcome back, <b>${order.name}</b>! Let's get this confirmed.`, 600);
+      
+      setTimeout(async () => { await askDelivery(hasDeliveryItem); }, 800);
+    } else {
+      // New customer
+      await botSay(`May I know your good name?`, 850);
+      step = 1; setInput('text');
+    }
+  } else {
+    // Opened chat generically with NO items selected
+    if (!hasHistory) {
+      addDatePill('Today');
+      await botSay(`Namaste! How can I help you today?`, 600);
+      await botSay(`You can ask me questions about our products or services.`, 700);
+      addChips([
+        {label: 'Show catalog', value: 'catalog'},
+        {label: 'Contact seller', value: 'contact'}
+      ], (val) => {
+        if (val === 'catalog') {
+          openExtraSelector();
+        } else {
+          botSay(`You can reach us at our phone number listed above or type your query here!`);
+          setInput('text');
+        }
+      });
+      setInput('none');
+    } else {
+      setInput('text');
+    }
+  }
+
+  // 2. Load listings of this business in background for the "buy extra" flow
+  if (BIZ_ID) {
+    sbMain.from('listings').select('*').eq('business_id', BIZ_ID).eq('is_available', true)
+      .order('is_featured', { ascending: false })
+      .order('created_at', { ascending: false })
+      .then(({data}) => { listingsList = data || []; });
+  }
+}
+
+function checkItemsForDelivery() {
+  if (!order.items || order.items.length === 0) return false;
+  // If at least one item has delivery enabled, show delivery choice
+  return order.items.some(item => item.has_delivery || item.booking_required === false);
+}
+
+// ─── CHAT FLOW STEPS ─────────────────────────────────────────────────────────
+async function askDelivery(hasDeliveryItem) {
+  if (hasDeliveryItem) {
+    await botSay(`Would you like Home Delivery or Shop Pickup? 🚚`);
+    addChips([
+      {label:'Home Delivery', value:'delivery'},
+      {label:'Shop Pickup', value:'pickup'}
+    ], (val) => {
+      order.delivery = val;
+      setTimeout(()=> val==='delivery' ? askLocation() : askBuyExtra(), 400);
+    });
+    setInput('none');
+  } else {
+    // No items support delivery
+    order.delivery = 'pickup';
+    askBuyExtra();
+  }
+}
+
+async function askLocation() {
+  if (order.location && order.location.lat) {
+    await botSay(`I have your saved delivery address:`);
+    const wrap=document.createElement('div'); wrap.className='msg in';
+    wrap.innerHTML=`
+      <div class="bubble" style="max-width:90%">
+        <div class="loc-confirmed">
+          <div class="la"><b>${order.location.label}</b><br>${order.location.fullAddress}</div>
+        </div>
+        <div class="chips" style="margin-top:8px;justify-content:flex-start;">
+          <button class="chip" id="useOld">Deliver here</button>
+          <button class="chip" id="changePin">Change</button>
+        </div>
+        <span class="time">${now()}</span>
+      </div>`;
+    chat.appendChild(wrap); scrollBottom();
+    wrap.querySelector('#useOld').addEventListener('click',()=>{
+      wrap.remove(); addBubble('Deliver to saved address','out');
+      setTimeout(()=>askBuyExtra(),500);
+    });
+    wrap.querySelector('#changePin').addEventListener('click',()=>{
+      wrap.remove(); addBubble('Change location','out');
+      setTimeout(()=>showMapPicker(),400);
+    });
+    setInput('none');
+  } else {
+    await botSay(`Please pin your exact delivery location on the map below 🗺️`);
+    showMapPicker();
+  }
+}
+
+function showMapPicker() {
+  const wrap=document.createElement('div'); wrap.className='msg in';
+  wrap.innerHTML=`
+    <div class="bubble" style="max-width:90%">
+      <button class="map-tap-btn" id="openMapBtn">
+        <div class="mt">Tap to Open Map</div>
+        <div class="ms">Drag the pin to your exact delivery location</div>
+      </button>
+      <span class="time">${now()}</span>
+    </div>`;
+  chat.appendChild(wrap); scrollBottom();
+
+  wrap.querySelector('#openMapBtn').addEventListener('click',()=>{
+    openMapOverlay(loc=>{
+      order.location = loc;
+      saved.location = loc;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      wrap.remove();
+
+      // Confirmed Location bubble
+      const conf=document.createElement('div'); conf.className='msg out';
+      conf.innerHTML=`
+        <div class="bubble" style="max-width:90%">
+          <div class="loc-confirmed">
+            <div class="la"><b>${loc.label}</b><br><span style="color:#666;font-size:10px">${loc.fullAddress}</span></div>
+          </div>
+          <span class="time">${now()} <span class="tick">✓✓</span></span>
+        </div>`;
+      chat.appendChild(conf); scrollBottom();
+
+      // Record location in history
+      recordHistory({ type: 'loc-confirmed', label: loc.label, address: loc.fullAddress, time: now() });
+
+      setTimeout(()=>askBuyExtra(), 600);
+    });
+  });
+}
+
+async function askBuyExtra() {
+  await botSay(`Would you like to buy anything else from ${BIZ_NAME}? 🛍️`);
+  addChips([
+    {label:'Yes, add items', value:'yes'},
+    {label:'No, proceed', value:'no'}
+  ], (val) => {
+    if (val === 'yes') {
+      setTimeout(()=>openExtraSelector(), 400);
+    } else {
+      setTimeout(()=>askNotes(), 400);
+    }
+  });
+  setInput('none');
+}
+
+async function askNotes() {
+  await botSay(`Any special instructions? (landmark, floor, gate code etc.)<br>Or say <b>"No"</b> to skip 🙂`);
+  step = 10; setInput('text');
+}
+
+function showSummary() {
+  botSay(`Here is your order summary 👇`);
+  setTimeout(()=>{
+    let subtotal = 0;
+    order.items.forEach(it => { subtotal += it.price * it.quantity; });
+    const isDelivery = order.delivery === 'delivery';
+    const hasDeliveryItem = checkItemsForDelivery();
+    const deliveryChargeVal = (isDelivery && hasDeliveryItem) 
+      ? (parseFloat(BIZ_DELIVERY_CHARGES.replace(/[^0-9.]/g, '')) || 0) 
+      : 0;
+    const total = subtotal + deliveryChargeVal;
+
+    const rows=[
+      ['Seller', BIZ_NAME + ', ' + BIZ_TOWN],
+      ['Customer', order.name],
+      ['Phone', order.phone],
+      ['Items', order.items.map(it=> {
+        let s = `${it.name} ${it.variant ? `(${it.variant})` : ''} x ${it.quantity}`;
+        if (it.booking_date) {
+          s += `<br><span style="font-size:10.5px;color:#555;display:inline-block;margin-top:2px;">📅 ${it.booking_date}${it.booking_time ? ` @ ${it.booking_time}` : ''}</span>`;
+        }
+        return s;
+      }).join('<br>') || 'None'],
+    ];
+
+    if (hasDeliveryItem) {
+      rows.push(['Type', isDelivery ? 'Home Delivery' : 'Direct Booking / Shop Pickup']);
+      if(isDelivery && order.location) {
+        rows.push(['Location', order.location.label]);
+        rows.push(['Delivery Fee', `₹${BIZ_DELIVERY_CHARGES} (may vary by distance)`]);
+      }
+      rows.push(['Payment', isDelivery ? 'Cash on Delivery (COD)' : 'To be confirmed on call/chat']);
+    } else {
+      rows.push(['Type', 'Standard Booking']);
+      rows.push(['Payment', 'To be confirmed on call/chat']);
+    }
+
+    if(order.notes && order.notes.toLowerCase() !== 'no') {
+      rows.push(['Notes', order.notes]);
+    }
+    rows.push(['Total Bill', `₹${total}`]);
+
+    const rowsHTML=rows.map(([k,v])=>`<div class="sum-row"><span class="sum-key">${k}</span><span class="sum-val">${v}</span></div>`).join('');
+    const wrap=document.createElement('div'); wrap.className='msg in';
+    wrap.innerHTML=`<div class="bubble" style="max-width:94%;padding:0"><div class="summary-card"><div class="sum-header">Order Summary</div>${rowsHTML}</div><span class="time" style="padding:0 8px 6px;display:block">${now()}</span></div>`;
+    chat.appendChild(wrap); scrollBottom();
+
+    // Record summary card in history
+    recordHistory({ type: 'summary', html: wrap.querySelector('.summary-card').outerHTML });
+
+    setTimeout(()=>{
+      botSay(`Is everything correct?`);
+      addChips([
+        {label:'Confirm Order', value:'confirm'},
+        {label:'Start Over', value:'restart'}
+      ], (val)=>{
+        if(val==='confirm') confirmOrder();
+        else restartFlow();
+      });
+      setInput('none');
+    }, 600);
+  }, 950);
+}
+
+async function confirmOrder(){
+  addTyping();
+  try {
+    // 1. Create/Update customer in Leads DB
+    let customerId = null;
+    const { data: exCust } = await sbLeads.from('customers').select('id').eq('phone', order.phone).maybeSingle();
+    
+    if (exCust) {
+      customerId = exCust.id;
+      await sbLeads.from('customers').update({
+        name: order.name,
+        saved_address: order.location?.fullAddress || '',
+        saved_lat: order.location?.lat || null,
+        saved_lng: order.location?.lng || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', customerId);
+    } else {
+      const { data: newCust, error: cErr } = await sbLeads.from('customers').insert({
+        name: order.name,
+        phone: order.phone,
+        saved_address: order.location?.fullAddress || '',
+        saved_lat: order.location?.lat || null,
+        saved_lng: order.location?.lng || null
+      }).select('id').single();
+      if(cErr) throw cErr;
+      if(!newCust) throw new Error("Could not register customer profile.");
+      customerId = newCust.id;
+    }
+
+    // Calculate total price
+    let subtotal = 0;
+    order.items.forEach(it => { subtotal += it.price * it.quantity; });
+    const hasDeliveryItem = checkItemsForDelivery();
+    const isDelivery = order.delivery === 'delivery';
+    const deliveryFee = (isDelivery && hasDeliveryItem) ? (parseFloat(BIZ_DELIVERY_CHARGES.replace(/[^0-9.]/g, '')) || 0) : 0;
+    const total = subtotal + deliveryFee;
+
+    const bizLoc = {
+      address: '',
+      latitude: BIZ_LATITUDE,
+      longitude: BIZ_LONGITUDE
+    };
+
+    // 2. Submit order to Leads DB
+    const { data: ordData, error: oErr } = await sbLeads.from('orders').insert({
+      customer_id: customerId,
+      customer_name: order.name,
+      customer_phone: order.phone,
+      business_id: BIZ_ID,
+      business_name: BIZ_NAME,
+      business_location: bizLoc,
+      delivery_type: order.delivery,
+      delivery_address: order.location?.fullAddress || '',
+      delivery_lat: order.location?.lat || null,
+      delivery_lng: order.location?.lng || null,
+      delivery_charges: hasDeliveryItem ? BIZ_DELIVERY_CHARGES : '0',
+      items: order.items,
+      notes: order.notes,
+      total_price: total
+    }).select('id').single();
+
+    if(oErr) throw oErr;
+    if(!ordData) throw new Error("Could not submit order details.");
+
+    removeTyping();
+    const ref = 'MP' + ordData.id.slice(0, 6).toUpperCase();
+    
+    // Save locally
+    saved.name = order.name;
+    saved.phone = order.phone;
+    saved.location = order.location;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+
+    const paymentPrompt = isDelivery 
+      ? '<div style="font-size:10px;color:#999;margin-top:8px">Cash on Delivery (COD)</div>' 
+      : '<div style="font-size:10px;color:#999;margin-top:8px">Payment details will be confirmed on call/chat</div>';
+
+    const done=`<div class="done-card"><div class="done-title">Order Received!</div><div class="done-sub">Thank you, <b>${order.name}</b>!<br>We will call you on <b>${order.phone}</b> shortly.</div><div class="done-ref">${ref}</div>${paymentPrompt}</div>`;
+    const wrap=document.createElement('div'); wrap.className='msg in';
+    wrap.innerHTML=`<div class="bubble" style="max-width:94%;padding:4px">${done}<span class="time" style="padding:0 8px 4px;display:block">${now()}</span></div>`;
+    chat.appendChild(wrap); scrollBottom();
+
+    // Record done card in history
+    recordHistory({ type: 'done', html: done });
+
+    setTimeout(() => {
+      botSay(`We will contact you soon to coordinate details. Have a wonderful day! 🌿`, 700);
+      setInput('none');
+    }, 850);
+
+  } catch(err) {
+    console.error("Failed placing order:", err);
+    removeTyping();
+    const errMsg = err.message || err.details || JSON.stringify(err);
+    botSay(`Order submission failed: <b>${errMsg}</b>.<br>Please try confirming again.`, 500);
+    // Add chip to retry
+    addChips([{label:'Retry Confirm Order', value:'confirm'}], () => confirmOrder());
+  }
+}
+
+function restartFlow(){
+  chat.innerHTML='';
+  Object.assign(order, { name:'', phone:'', delivery:'', location:null, items: PRE_ITEMS, notes:'' });
+  saved = {}; localStorage.removeItem(STORAGE_KEY);
+  step = 0; startFlow();
+}
+
+// ─── TEXT INPUT HANDLER ───────────────────────────────────────────────────────
+function handleSend(){
+  const val=input.value.trim(); if(!val) return;
+  input.value=''; sendBtn.disabled=true;
+
+  if(step===1){
+    const name=cleanName(val);
+    if(name.length<2){
+      addBubble(val,'out');
+      botSay(`Please share your full name (e.g. Ramesh Kumar)`);
+      return;
+    }
+    addBubble(val,'out'); order.name=name; saved.name=name; step=2;
+    botSay(`Nice to meet you, <b>${name}</b>!<br>Please share your phone number.`, 700);
+    input.setAttribute('type','tel');
+
+  } else if(step===2){
+    addBubble(val,'out');
+    const phone=val.replace(/\D/g,'');
+    if(!isValidPhone(phone)){
+      botSay(`Please enter a valid 10-digit mobile number.`, 600);
+      return;
+    }
+    order.phone=phone; saved.phone=phone;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    
+    input.setAttribute('type','text');
+    setInput('none');
+
+    // Check leads DB for name override or location details
+    addTyping();
+    sbLeads.from('customers').select('*').eq('phone', phone).maybeSingle()
+      .then(({data}) => {
+        removeTyping();
+        if(data) {
+          order.name = data.name;
+          saved.name = data.name;
+          if (data.saved_address) {
+            order.location = {
+              label: data.saved_address.split(',')[0] || 'Saved Location',
+              fullAddress: data.saved_address,
+              lat: parseFloat(data.saved_lat),
+              lng: parseFloat(data.saved_lng)
+            };
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+          botSay(`Found your details! Delivery name: <b>${order.name}</b>`, 500);
+        }
+        const hasDel = checkItemsForDelivery();
+        setTimeout(async () => { await askDelivery(hasDel); }, 800);
+      })
+      .catch(async () => {
+        removeTyping();
+        const hasDel = checkItemsForDelivery();
+        await askDelivery(hasDel);
+      });
+
+  } else if(step===10){
+    addBubble(val,'out'); order.notes=val; step=11; setInput('none'); showSummary();
+  }
+}
+
+// ─── ADDITIONAL PRODUCTS SELECTOR UI ─────────────────────────────────────────
+const extraSheet = document.getElementById('extraSheet');
+const extraList = document.getElementById('extraList');
+
+function openExtraSelector() {
+  extraList.innerHTML = '';
+  // Exclude items already in order
+  const orderedIds = new Set(order.items.map(it => it.id));
+  const filtered = listingsList.filter(l => !orderedIds.has(l.id));
+
+  if (filtered.length === 0) {
+    botSay(`No more products are available to add.`);
+    askNotes();
+    return;
+  }
+
+  filtered.forEach(l => {
+    const listId = l.id;
+    extraQuantities[listId] = 0;
+
+    const row = document.createElement('div');
+    row.className = 'extra-item';
+    row.innerHTML = `
+      ${l.image_url ? `<img class="extra-img" src="${l.image_url}"/>` : `<div class="extra-ph">🛍️</div>`}
+      <div class="extra-info">
+        <div class="extra-name">${l.name}</div>
+        <div class="extra-price">${l.discount_price || l.price}</div>
+      </div>
+      <div class="extra-ctrls">
+        <button class="extra-btn" onclick="adjustExtraQty('${listId}', -1)">-</button>
+        <span class="extra-qty" id="eqty-${listId}">0</span>
+        <button class="extra-btn" onclick="adjustExtraQty('${listId}', 1)">+</button>
+      </div>
+    `;
+    extraList.appendChild(row);
+  });
+
+  extraSheet.classList.add('open');
+}
+
+window.adjustExtraQty = function(listId, d) {
+  const current = extraQuantities[listId] || 0;
+  const next = Math.max(0, current + d);
+  extraQuantities[listId] = next;
+  document.getElementById(`eqty-${listId}`).textContent = next;
+};
+
+function closeExtraSheet() {
+  extraSheet.classList.remove('open');
+  askNotes();
+}
+
+function confirmExtraItems() {
+  const itemsToAdd = [];
+  Object.keys(extraQuantities).forEach(listId => {
+    const qty = extraQuantities[listId];
+    if (qty > 0) {
+      const match = listingsList.find(l => l.id === listId);
+      if (match) {
+        itemsToAdd.push({
+          id: match.id,
+          name: match.name,
+          variant: null,
+          price: parseFloat(String(match.discount_price || match.price).replace(/[^0-9.]/g, '')) || 0,
+          quantity: qty,
+          qty_label: match.qty_label || 'Quantity',
+          has_delivery: match.has_delivery
+        });
+      }
+    }
+  });
+
+  extraSheet.classList.remove('open');
+
+  if (itemsToAdd.length > 0) {
+    order.items = [...order.items, ...itemsToAdd];
+    const textMsg = `Added the following to my order:\n` + itemsToAdd.map(it => `• ${it.name} (Qty: ${it.quantity})`).join('\n');
+    addBubble(textMsg, 'out');
+    setTimeout(() => askNotes(), 600);
+  } else {
+    addBubble('No extra items added', 'out');
+    setTimeout(() => askNotes(), 500);
+  }
+}
+
+// ─── LEAFLET MAP FUNCTIONALITY ──────────────────────────────────────────────
+let leafletMap = null, marker = null, currentLocData = null, geocodeTimer = null;
+
+function openMapOverlay(onConfirm) {
+  const overlay = document.getElementById('mapOverlay');
+  const confirmBtn = document.getElementById('mapConfirmBtn');
+  
+  overlay.classList.remove('hidden');
+  document.getElementById('addrText').className = 'addr-text loading';
+  document.getElementById('addrText').textContent = 'Pin your location...';
+  confirmBtn.disabled = true;
+
+  // Let CSS map container display before Leaflet triggers viewport sizing
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    initMap(onConfirm);
+  }));
+}
+
+function initMap(onConfirm) {
+  const hpCenter = [31.9, 77.1];
+  // Center on business coordinates, fallback to general area
+  const startLL = (order.location?.lat)
+    ? [order.location.lat, order.location.lng]
+    : (BIZ_LATITUDE && BIZ_LONGITUDE)
+      ? [BIZ_LATITUDE, BIZ_LONGITUDE]
+      : hpCenter;
+
+  const startZoom = (order.location?.lat || (BIZ_LATITUDE && BIZ_LONGITUDE)) ? 15 : 10;
+
+  if (!mapInitialized) {
+    leafletMap = L.map('leaflet-map').setView(startLL, startZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(leafletMap);
+
+    const icon = L.divIcon({
+      html: `<div style="font-size:32px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))">📍</div>`,
+      iconSize: [32, 32], iconAnchor: [16, 32], className: ''
+    });
+    marker = L.marker(startLL, { draggable: true, icon }).addTo(leafletMap);
+    marker.on('dragend', () => reverseGeocode(marker.getLatLng()));
+    leafletMap.on('click', e => { marker.setLatLng(e.latlng); reverseGeocode(e.latlng); });
+
+    // Confirm button listener
+    document.getElementById('mapConfirmBtn').addEventListener('click', () => {
+      if (!currentLocData) return;
+      document.getElementById('mapOverlay').classList.add('hidden');
+      onConfirm(currentLocData);
+    });
+
+    mapInitialized = true;
+  } else {
+    leafletMap.setView(startLL, startZoom);
+    marker.setLatLng(startLL);
+    leafletMap.invalidateSize();
+  }
+
+  // Pre-fill location search input with business town for easy navigation
+  document.getElementById('searchInput').value = BIZ_TOWN;
+
+  reverseGeocode(L.latLng(startLL[0], startLL[1]));
+}
+
+function reverseGeocode(latlng) {
+  const addrEl  = document.getElementById('addrText');
+  const confBtn = document.getElementById('mapConfirmBtn');
+  addrEl.className = 'addr-text loading';
+  addrEl.textContent = 'Fetching address...';
+  confBtn.disabled = true; currentLocData = null;
+
+  clearTimeout(geocodeTimer);
+  geocodeTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latlng.lat}&lon=${latlng.lng}&format=json`, {
+        headers: { 'Accept-Language': 'en' }
+      });
+      const d = await r.json(); const a = d.address || {};
+      const parts = [
+        a.house_number,
+        a.road || a.pedestrian,
+        a.village || a.suburb || a.neighbourhood || a.hamlet,
+        a.town || a.city || a.county,
+        a.state_district,
+        a.state
+      ].filter(Boolean);
+      
+      const full = parts.join(', ') || d.display_name || `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`;
+      const label = parts.slice(2, 5).join(', ') || 'Pinned Location';
+      
+      addrEl.className = 'addr-text'; addrEl.textContent = full;
+      currentLocData = {
+        label,
+        fullAddress: full,
+        lat: latlng.lat,
+        lng: latlng.lng
+      };
+      confBtn.disabled = false;
+    } catch {
+      const fb = `${latlng.lat.toFixed(4)}°N, ${latlng.lng.toFixed(4)}°E`;
+      addrEl.className = 'addr-text'; addrEl.textContent = fb;
+      currentLocData = { label: 'Pinned Location', fullAddress: fb, lat: latlng.lat, lng: latlng.lng };
+      confBtn.disabled = false;
+    }
+  }, 750);
+}
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim(); if (!q) return;
+  const addrEl = document.getElementById('addrText');
+  addrEl.className = 'addr-text loading'; addrEl.textContent = 'Searching location...';
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ', Himachal Pradesh, India')}&format=json&limit=1`, {
+      headers: { 'Accept-Language': 'en' }
+    });
+    const d = await r.json();
+    if (d && d.length > 0) {
+      const ll = L.latLng(parseFloat(d[0].lat), parseFloat(d[0].lon));
+      leafletMap.setView(ll, 15); marker.setLatLng(ll); reverseGeocode(ll);
+    } else {
+      addrEl.className = 'addr-text'; addrEl.textContent = 'Location not found. Try a different name.';
+    }
+  } catch {
+    addrEl.className = 'addr-text'; addrEl.textContent = 'Search failed.';
+  }
+}
+
+document.getElementById('searchBtn').addEventListener('click', doSearch);
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+document.getElementById('mapCloseBtn').addEventListener('click', () => {
+  document.getElementById('mapOverlay').classList.add('hidden');
+});
+
+// Centering geocode to town if coordinates not present
+async function geocodeTown() {
+  if (BIZ_LATITUDE && BIZ_LONGITUDE) return; // already has coords
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(BIZ_TOWN + ', Himachal Pradesh, India')}&format=json&limit=1`, {
+      headers: { 'Accept-Language': 'en' }
+    });
+    const d = await r.json();
+    if (d && d.length > 0) {
+      BIZ_LATITUDE = parseFloat(d[0].lat);
+      BIZ_LONGITUDE = parseFloat(d[0].lon);
+    }
+  } catch(e){}
+}
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+geocodeTown();
+startFlow();
+</script>
+</body>
+</html>
