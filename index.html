@@ -173,11 +173,11 @@ body{display:flex;flex-direction:column;width:100%;max-width:100%;margin:0 auto;
   <div style="position:relative; display:inline-block;">
     <button id="menuBtn" class="h-menu-btn">⋮</button>
     <div id="headerMenu" class="h-dropdown hidden">
-      <button id="viewProfileBtn" class="h-dropdown-item">🏪 Shop Profile</button>
-      <button id="clearChatBtn" class="h-dropdown-item danger">🗑️ Clear Chat & Reset</button>
+      <button id="viewProfileBtn" class="h-dropdown-item">Shop Profile</button>
+      <button id="newOrderBtn" class="h-dropdown-item">Start New Order</button>
+      <button id="clearChatBtn" class="h-dropdown-item danger">Clear Chat & Reset</button>
     </div>
   </div>
-  <div class="h-badge">Order Agent</div>
 </div>
 
 <!-- CHAT -->
@@ -281,6 +281,7 @@ let listingsList = []; // store owner's catalog
 let extraQuantities = {}; // tracking selections for add extra
 let mapInitialized = false;
 let tempCoords = null;
+let isNewOrderSelection = false;
 
 const chat    = document.getElementById('chat');
 const input   = document.getElementById('userInput');
@@ -319,6 +320,7 @@ sendBtn.addEventListener('click', handleSend);
 const menuBtn = document.getElementById('menuBtn');
 const headerMenu = document.getElementById('headerMenu');
 const viewProfileBtn = document.getElementById('viewProfileBtn');
+const newOrderBtn = document.getElementById('newOrderBtn');
 const clearChatBtn = document.getElementById('clearChatBtn');
 
 if (menuBtn && headerMenu) {
@@ -334,6 +336,12 @@ document.addEventListener('click', () => {
 if (viewProfileBtn) {
   viewProfileBtn.addEventListener('click', () => {
     window.open(profileUrl, '_blank');
+  });
+}
+
+if (newOrderBtn) {
+  newOrderBtn.addEventListener('click', () => {
+    startNewOrderFlow();
   });
 }
 
@@ -452,14 +460,9 @@ function removeTyping(){ const t=document.getElementById('typing'); if(t) t.remo
 
 async function startFlow(){
   const hasHistory = loadHistory();
-  const itemsQuery = params.get('items') || '';
-  const lastItemsQuery = localStorage.getItem(`mp_last_items_${BIZ_ID}`) || '';
-  const isNewRequest = itemsQuery && (!hasHistory || itemsQuery !== lastItemsQuery);
 
   // 1. Simulate WhatsApp outgoing order message
-  if (isNewRequest) {
-    localStorage.setItem(`mp_last_items_${BIZ_ID}`, itemsQuery);
-    
+  if (order.items && order.items.length > 0) {
     if (!hasHistory) {
       addDatePill('Today');
     } else {
@@ -522,7 +525,7 @@ async function startFlow(){
       step = 1; setInput('text');
     }
   } else {
-    // Opened chat generically with NO items selected or page refresh
+    // Opened chat generically with NO items selected
     if (!hasHistory) {
       addDatePill('Today');
       await botSay(`Namaste! How can I help you today?`, 600);
@@ -979,7 +982,12 @@ window.adjustExtraQty = function(listId, d) {
 
 function closeExtraSheet() {
   extraSheet.classList.remove('open');
-  askNotes();
+  if (isNewOrderSelection) {
+    isNewOrderSelection = false;
+    botSay("New order selection cancelled.");
+  } else {
+    askNotes();
+  }
 }
 
 function confirmExtraItems() {
@@ -1004,15 +1012,76 @@ function confirmExtraItems() {
 
   extraSheet.classList.remove('open');
 
-  if (itemsToAdd.length > 0) {
-    order.items = [...order.items, ...itemsToAdd];
-    const textMsg = `Added the following to my order:\n` + itemsToAdd.map(it => `• ${it.name} (Qty: ${it.quantity})`).join('\n');
+  if (isNewOrderSelection) {
+    isNewOrderSelection = false;
+    if (itemsToAdd.length === 0) {
+      botSay("No items selected. Please choose items to start an order.");
+      return;
+    }
+    order.items = itemsToAdd;
+    const textMsg = `Selected for new order:\n` + itemsToAdd.map(it => `• ${it.name} x ${it.quantity}`).join('\n');
     addBubble(textMsg, 'out');
-    setTimeout(() => askNotes(), 600);
+    const hasDeliveryItem = checkItemsForDelivery();
+    setTimeout(async () => { await askDelivery(hasDeliveryItem); }, 600);
   } else {
-    addBubble('No extra items added', 'out');
-    setTimeout(() => askNotes(), 500);
+    if (itemsToAdd.length > 0) {
+      order.items = [...order.items, ...itemsToAdd];
+      const textMsg = `Added the following to my order:\n` + itemsToAdd.map(it => `• ${it.name} (Qty: ${it.quantity})`).join('\n');
+      addBubble(textMsg, 'out');
+      setTimeout(() => askNotes(), 600);
+    } else {
+      addBubble('No extra items added', 'out');
+      setTimeout(() => askNotes(), 500);
+    }
   }
+}
+
+function startNewOrderFlow() {
+  order.delivery = '';
+  order.items = [];
+  order.notes = '';
+  extraQuantities = {};
+  
+  chat.innerHTML = '';
+  addDatePill('New Order');
+  
+  botSay(`Let's start a new order. Please choose items from our catalog below:`);
+  
+  openExtraSelectorForNewOrder();
+}
+
+function openExtraSelectorForNewOrder() {
+  extraList.innerHTML = '';
+  extraQuantities = {};
+  
+  if (listingsList.length === 0) {
+    botSay(`No products are currently available in the catalog.`);
+    return;
+  }
+
+  listingsList.forEach(l => {
+    const listId = l.id;
+    extraQuantities[listId] = 0;
+
+    const row = document.createElement('div');
+    row.className = 'extra-item';
+    row.innerHTML = `
+      ${l.image_url ? `<img class="extra-img" src="${l.image_url}"/>` : `<div class="extra-ph">🛍️</div>`}
+      <div class="extra-info">
+        <div class="extra-name">${l.name}</div>
+        <div class="extra-price">₹${l.discount_price || l.price}</div>
+      </div>
+      <div class="extra-ctrls">
+        <button class="extra-btn" onclick="adjustExtraQty('${listId}', -1)">-</button>
+        <span class="extra-qty" id="eqty-${listId}">0</span>
+        <button class="extra-btn" onclick="adjustExtraQty('${listId}', 1)">+</button>
+      </div>
+    `;
+    extraList.appendChild(row);
+  });
+
+  extraSheet.classList.add('open');
+  isNewOrderSelection = true;
 }
 
 // ─── LEAFLET MAP FUNCTIONALITY ──────────────────────────────────────────────
