@@ -233,8 +233,8 @@ const BIZ_ID = params.get('biz_id');
 const BIZ_NAME = params.get('biz_name') || 'Pahadi Store';
 const BIZ_TOWN = params.get('biz_town') || 'Rampur Bushahr';
 const BIZ_DELIVERY_CHARGES = params.get('biz_delivery_charges') || '0';
-const BIZ_LATITUDE = parseFloat(params.get('biz_latitude')) || null;
-const BIZ_LONGITUDE = parseFloat(params.get('biz_longitude')) || null;
+let BIZ_LATITUDE = parseFloat(params.get('biz_latitude')) || null;
+let BIZ_LONGITUDE = parseFloat(params.get('biz_longitude')) || null;
 const BIZ_WHATSAPP = params.get('biz_whatsapp') || '';
 const BIZ_DP = params.get('biz_dp') || '';
 const BIZ_USERNAME = params.get('biz_username') || '';
@@ -456,6 +456,12 @@ function addTyping(){
   w.innerHTML=`<div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
   chat.appendChild(w); scrollBottom();
 }
+
+function removeTyping(){
+  const t=document.getElementById('typing');
+  if(t && t.parentNode) t.parentNode.removeChild(t);
+}
+
 async function botSay(html,delay=800){
   addTyping();
   await new Promise(r=>setTimeout(r,delay));
@@ -473,7 +479,9 @@ function addChips(options, onSelect){
       btn.classList.add('selected');
       const txt=btn.textContent;
       addBubble(txt,'out');
-      setTimeout(()=>wrap.remove(),300);
+      setTimeout(()=>{
+        if(wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      },300);
       onSelect(typeof opt==='object'?opt.value:opt, txt);
     });
     wrap.appendChild(btn);
@@ -621,11 +629,13 @@ async function askLocation() {
       </div>`;
     chat.appendChild(wrap); scrollBottom();
     wrap.querySelector('#useOld').addEventListener('click',()=>{
-      wrap.remove(); addBubble('Deliver to saved address','out');
+      if(wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      addBubble('Deliver to saved address','out');
       setTimeout(()=>askBuyExtra(),500);
     });
     wrap.querySelector('#changePin').addEventListener('click',()=>{
-      wrap.remove(); addBubble('Change location','out');
+      if(wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+      addBubble('Change location','out');
       setTimeout(()=>showMapPicker(),400);
     });
     setInput('none');
@@ -650,7 +660,7 @@ function showMapPicker() {
   wrap.querySelector('#openMapBtn').addEventListener('click',()=>{
     openMapOverlay(loc=>{
       tempCoords = { lat: loc.lat, lng: loc.lng };
-      wrap.remove();
+      if(wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
       askCustomAddress();
     });
   });
